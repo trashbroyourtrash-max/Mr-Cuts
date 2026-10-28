@@ -72,7 +72,19 @@ export default {
         return json({ok:true, id:result.meta.last_row_id}, 201);
       }
 
+     
       // Admin: see bookings
+      
+if (url.pathname === "/api/availability" && request.method === "GET") {
+  const result = await env.DB.prepare(`
+    SELECT date, time
+    FROM bookings
+    WHERE status IN ('pending', 'accepted')
+  `).all();
+
+  return json({ bookings: result.results || [] });
+}
+
       if (url.pathname === "/api/bookings" && request.method === "GET") {
         if (!admin(request, env)) return json({error:"Unauthorized"}, 401);
         const result = await env.DB.prepare(
