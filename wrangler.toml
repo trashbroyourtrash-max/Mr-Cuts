@@ -1,3 +1,9 @@
+
 name = "mrcutssalon"
 main = "worker.js"
 compatibility_date = "2026-10-20"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mr-cuts-salon-db"
+database_id = "dbd85bed-5aa1-476d-8767-5601b6f22654"
