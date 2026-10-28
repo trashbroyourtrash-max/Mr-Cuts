@@ -1,4 +1,4 @@
-name = "mr-cuts-salon"
+name = "mrcutssalon"
 main = "worker.js"
 compatibility_date = "2026-10-28"
 
