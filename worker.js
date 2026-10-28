@@ -1,6 +1,14 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/" && request.method === "GET") {
+  return new Response(
+    "Mr Cuts Salon API is running! Use /api/services, /api/bookings, or /api/listings.",
+    {
+      headers: { "Content-Type": "text/plain; charset=utf-8" }
+    }
+  );
+}
 
     if (request.method === "OPTIONS") {
       return new Response(null, {
