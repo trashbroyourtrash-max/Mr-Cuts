@@ -5,4 +5,4 @@ compatibility_date = "2026-10-28"
 [[d1_databases]]
 binding = "DB"
 database_name = "mr-cuts-salon-db"
-database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+database_id = "dbd85bed-5aa1-476d-8767-5601b6f22654"
