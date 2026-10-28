@@ -1,11 +1,9 @@
 
 const API_BASE = "https://mrcutssalon.trashbroyourtrash.workers.dev";
 
-// Change these times to match your salon's actual opening hours.
 const TIME_SLOTS = [
-  "10:00", "11:00", "12:00", "13:00",
-  "14:00", "15:00", "16:00", "17:00",
-  "18:00", "19:00"
+  "10:00", "11:00", "12:00", "13:00", "14:00",
+  "15:00", "16:00", "17:00", "18:00", "19:00"
 ];
 
 const calendar = document.getElementById("calendar");
@@ -14,8 +12,8 @@ const form = document.getElementById("bookingForm");
 if (calendar && form) {
   const title = document.getElementById("monthTitle");
   const days = document.getElementById("days");
-  const selectedDateText = document.getElementById("selectedDate");
   const dateInput = document.getElementById("bookingDate");
+  const dateLabel = document.getElementById("selectedDate");
   const timeSelect = document.getElementById("bookingTime");
   const serviceSelect = document.getElementById("service");
   const message = document.getElementById("bookingMessage");
@@ -25,50 +23,37 @@ if (calendar && form) {
   today.setHours(0, 0, 0, 0);
 
   let view = new Date(today.getFullYear(), today.getMonth(), 1);
-  let selectedDate = null;
+  let selectedDate = "";
   let bookings = [];
-  let availabilityLoaded = false;
   let servicesLoaded = false;
+  let availabilityLoaded = false;
 
-  function iso(year, month, day) {
-    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  function iso(y, m, d) {
+    return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  async function api(path, options = {}) {
+    const response = await fetch(API_BASE + path, options);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Request failed.");
+    }
+
+    return data;
   }
 
   function setMessage(text) {
     message.textContent = text;
   }
 
-  async function getJSON(path) {
-    const response = await fetch(`${API_BASE}${path}`);
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.error || "The server request failed.");
-    }
-
-    return data;
-  }
-
-  function bookedTimes(date) {
-    return bookings
-      .filter(item => item.date === date)
-      .map(item => item.time);
-  }
-
-  function availableTimes(date) {
-    const used = bookedTimes(date);
-    return TIME_SLOTS.filter(time => !used.includes(time));
-  }
-
   async function loadServices() {
-    serviceSelect.innerHTML = '<option value="">Loading services...</option>';
-
     try {
-      const data = await getJSON("/api/services");
+      const data = await api("/api/services");
       const services = Array.isArray(data) ? data : data.services;
 
       if (!Array.isArray(services) || services.length === 0) {
-        throw new Error("No services are listed yet.");
+        throw new Error("No services are available.");
       }
 
       serviceSelect.innerHTML = '<option value="">Choose a service</option>';
@@ -83,36 +68,37 @@ if (calendar && form) {
       servicesLoaded = true;
     } catch (error) {
       serviceSelect.innerHTML = '<option value="">Could not load services</option>';
-      setMessage(`Could not load services: ${error.message}`);
+      setMessage("Could not load services. Please try again later.");
     }
+  }
+
+  function availableTimes(date) {
+    const used = bookings
+      .filter(booking => booking.date === date)
+      .map(booking => booking.time);
+
+    return TIME_SLOTS.filter(time => !used.includes(time));
   }
 
   async function loadAvailability() {
     availabilityLoaded = false;
-    setMessage("Loading appointment availability...");
     renderCalendar();
 
     try {
-      const data = await getJSON("/api/availability");
+      const data = await api("/api/availability");
       bookings = Array.isArray(data) ? data : data.bookings;
 
       if (!Array.isArray(bookings)) {
-        throw new Error("The availability response was not in the expected format.");
+        throw new Error("Unexpected availability response.");
       }
 
       availabilityLoaded = true;
       renderCalendar();
 
-      if (selectedDate) {
-        showSelection(selectedDate);
-      } else {
-        setMessage("Choose an available date to see appointment times.");
-      }
+      if (selectedDate) showSelection(selectedDate);
+      else setMessage("Choose an available date.");
     } catch (error) {
-      bookings = [];
-      availabilityLoaded = false;
-      renderCalendar();
-      setMessage(`Could not load availability: ${error.message}`);
+      setMessage("Could not load availability. Please refresh the page.");
     }
   }
 
@@ -127,50 +113,40 @@ if (calendar && form) {
 
     days.innerHTML = "";
 
-    const firstDay = new Date(year, month, 1).getDay();
-    const numberOfDays = new Date(year, month + 1, 0).getDate();
+    const first = new Date(year, month, 1).getDay();
+    const count = new Date(year, month + 1, 0).getDate();
 
-    for (let i = 0; i < firstDay; i++) {
+    for (let i = 0; i < first; i++) {
       const empty = document.createElement("div");
       empty.className = "day empty";
-      empty.setAttribute("aria-hidden", "true");
       days.appendChild(empty);
     }
 
-    for (let day = 1; day <= numberOfDays; day++) {
-      const key = iso(year, month, day);
-      const date = new Date(year, month, day);
+    for (let d = 1; d <= count; d++) {
+      const key = iso(year, month, d);
+      const date = new Date(year, month, d);
       const isPast = date < today;
       const remaining = availableTimes(key);
-      const fullyBooked = availabilityLoaded && remaining.length === 0;
+      const isBooked = availabilityLoaded && remaining.length === 0;
 
       const button = document.createElement("button");
       button.type = "button";
       button.className = "day";
 
-      if (fullyBooked) button.classList.add("booked");
+      if (isBooked) button.classList.add("booked");
       if (selectedDate === key) button.classList.add("selected");
 
-      const isUnavailable = isPast || fullyBooked || !availabilityLoaded;
-      button.disabled = isUnavailable;
-
-      const number = document.createElement("span");
-      number.textContent = String(day);
-      button.appendChild(number);
-
       const small = document.createElement("small");
-      if (isPast) {
-        small.textContent = "Past";
-      } else if (!availabilityLoaded) {
-        small.textContent = "Loading";
-      } else if (fullyBooked) {
-        small.textContent = "Booked";
-      } else {
-        small.textContent = "Open";
-      }
-      button.appendChild(small);
 
-      if (!isUnavailable) {
+      if (isPast) small.textContent = "Past";
+      else if (!availabilityLoaded) small.textContent = "Loading";
+      else if (isBooked) small.textContent = "Booked";
+      else small.textContent = "Open";
+
+      button.append(document.createTextNode(d), small);
+      button.disabled = isPast || isBooked || !availabilityLoaded;
+
+      if (!button.disabled) {
         button.addEventListener("click", () => {
           selectedDate = key;
           renderCalendar();
@@ -186,42 +162,28 @@ if (calendar && form) {
   }
 
   function showSelection(date) {
-    const parts = date.split("-").map(Number);
-    const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
-
-    selectedDateText.textContent = localDate.toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric"
-    });
+    const [y, m, d] = date.split("-").map(Number);
+    dateLabel.textContent = new Date(y, m - 1, d).toLocaleDateString(
+      "en-US",
+      { weekday: "long", month: "long", day: "numeric", year: "numeric" }
+    );
 
     dateInput.value = date;
-
-    const times = availableTimes(date);
     timeSelect.innerHTML = "";
 
-    if (!availabilityLoaded) {
-      timeSelect.add(new Option("Availability unavailable", ""));
-      timeSelect.disabled = true;
-      return;
-    }
+    const times = availableTimes(date);
 
-    if (times.length === 0) {
-      timeSelect.add(new Option("Fully booked", ""));
+    if (!availabilityLoaded || times.length === 0) {
+      timeSelect.add(new Option("No times available", ""));
       timeSelect.disabled = true;
-      setMessage("Sorry, there are no available times on this date.");
       return;
     }
 
     timeSelect.add(new Option("Choose a time", ""));
-
-    times.forEach(time => {
-      timeSelect.add(new Option(time, time));
-    });
-
+    times.forEach(time => timeSelect.add(new Option(time, time)));
     timeSelect.disabled = false;
-    setMessage("Choose a time and service, then request your appointment.");
+
+    setMessage("Choose a service and time, then request your appointment.");
   }
 
   document.getElementById("prevMonth").addEventListener("click", () => {
@@ -248,18 +210,18 @@ if (calendar && form) {
     const date = dateInput.value;
     const time = timeSelect.value;
 
-    if (!availabilityLoaded || !servicesLoaded) {
-      setMessage("Services or availability have not loaded. Please try again.");
+    if (!servicesLoaded || !availabilityLoaded) {
+      setMessage("Please wait for services and availability to load.");
       return;
     }
 
     if (!name || !phone || !service || !date || !time) {
-      setMessage("Please complete all required fields and choose a date and time.");
+      setMessage("Please fill in all required fields.");
       return;
     }
 
     if (!availableTimes(date).includes(time)) {
-      setMessage("That time may have just been booked. Refreshing availability...");
+      setMessage("That time may have just been booked. Refreshing availability.");
       await loadAvailability();
       return;
     }
@@ -268,34 +230,26 @@ if (calendar && form) {
     submitButton.textContent = "Submitting...";
 
     try {
-      const response = await fetch(`${API_BASE}/api/bookings`, {
+      await api("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, phone, service, date, time })
       });
 
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(
-          result.error || "The booking could not be submitted. Please try another time."
-        );
-      }
-
       setMessage(
-        `Thank you, ${name}! Your appointment request for ${date} at ${time} has been submitted. It is pending confirmation by the salon.`
+        `Thanks, ${name}! Your appointment request was submitted. It is pending confirmation by the salon.`
       );
 
       form.reset();
-      selectedDate = null;
+      selectedDate = "";
       dateInput.value = "";
-      selectedDateText.textContent = "None";
+      dateLabel.textContent = "None";
       timeSelect.innerHTML = '<option value="">Choose a date first</option>';
       timeSelect.disabled = true;
 
       await loadAvailability();
     } catch (error) {
-      setMessage(`Booking failed: ${error.message}`);
+      setMessage("Booking failed: " + error.message);
       await loadAvailability();
     } finally {
       submitButton.disabled = false;
